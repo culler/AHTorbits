@@ -1,3 +1,4 @@
+from __future__ import print_function
 from orbits import *
 # Compute the number of components of a curve on a genus 2 surface
 # split along a separating curve bounding two one-holed tori.
@@ -19,5 +20,5 @@ def PG(p,q,r,n):
    return G.reduce()
 
 if __name__ == '__main__':
-   print 'p = q = r = n = 1:'
-   print PG(1,1,1,1), 'components'
+   print('p = q = r = n = 1:')
+   print(PG(1,1,1,1), 'components')

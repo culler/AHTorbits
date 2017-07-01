@@ -1,10 +1,13 @@
-from types import IntType, LongType
-Illegal = "Illegal Operation"
+from collections import Iterable
+from functools import total_ordering
+
+class Illegal(Exception):
+    pass
 
 def gcd(x, y):
     if x == 0:
         if y == 0:
-            raise ValueError, "gcd(0,0) is undefined."
+            raise ValueError('gcd(0,0) is undefined.')
         else:
             return abs(y)
     x = abs(x)
@@ -15,31 +18,27 @@ def gcd(x, y):
         y = r
     return x
 
-class Interval:
+class Interval(tuple):
     """
     A finite subinterval of the integers.
     """
+
+    def __new__(cls, a, b):
+        return super(Interval, cls).__new__(cls, (min(a,b), max(a,b)))
+    
     def __init__(self, a, b):
-        self.start = min(a,b)
-        self.end = max(a,b)
+        self.start = self[0]
+        self.end = self[1]
         self.width = self.end - self.start + 1
         
     def __repr__(self):
         return '[%d, %d]'%(self.start, self.end)
 
-    def __cmp__(self, other):
-        """
-        Intervals are ordered by (start, end) in lex order.
-        """
-        if self.start != other.start:
-            return cmp(self.start, other.start)
-        return cmp(self.end, other.end)
-    
     def __contains__(self, x):
         """
         True if the Interval contains the integer or Interval argument.
         """
-        if type(x) == IntType or type(x) == LongType :
+        if isinstance(x, int) :
             return self.start <= x <= self.end
         else:
             return self.start <= x.start and x.end <= self.end
@@ -67,17 +66,20 @@ def ToInterval(x):
     """
     Converts an integer or a 2-tuple to an Interval.
     """
-    if x.__class__ == Interval:
+    if isinstance(x, Interval):
         return x
-    if type(x) == IntType or type(x) == LongType :
+    elif isinstance(x, int):
         return Interval(x,x)
+    elif isinstance(x, Iterable):
+        return Interval(*x)
     else:
-        return Interval(x[0],x[1])
+        raise ValueError('Cannot create an interval from %s.'%x)
     
 class Isometry:
     """
     An element of the infinite dihedral group acting on the integers.
     """
+    
     def __init__(self, shift, flip=0):
         self.shift, self.flip = shift, flip
 
@@ -124,18 +126,22 @@ class Isometry:
         """
         An Isometry as a mapping (of an integer or an interval).
         """
-        if type(x) == IntType or type(x) == LongType:
+        if isinstance(x, int):
             if self.flip:
                 return -x + self.shift
             else:
                 return x + self.shift
-        if x.__class__ == Interval:
+        elif isinstance(x, Interval):
             return Interval(self(x.start), self(x.end))
+        else:
+            raise ValueError('Cannot evaluate %s on %s'%(self, x))
 
+@total_ordering
 class Pairing:
     """
     The restriction of an isometry to a finite interval.
     """
+    
     def __init__(self, domain, isometry):
         self.domain, self.isometry = domain, isometry
         self.range = self(self.domain)
@@ -152,23 +158,20 @@ class Pairing:
         A Pairing as a mapping.
         """
         if not x in self.domain:
-            raise Illegal, "Operand is not contained in domain."
+            raise Illegal('Operand is not contained in domain.')
         else:
             return self.isometry(x)
 
-    def __cmp__(self, other):
-        """
-        Linear ordering of Pairings.
-        """
-        if self.range.end != other.range.end:
-            return cmp(other.range.end, self.range.end)
-        if self.domain.width != other.domain.width:
-            return cmp(other.domain.width, self.domain.width)
-        if self.domain.start != other.domain.start:
-            return cmp(self.domain.start, other.domain.start)
-        return cmp(self.isometry.flip, other.isometry.flip)
+    def _complexity(self):
+        return -self.range.end, -self.domain.width, self.domain.start, self.isometry.flip
+    
+    def __eq__(self, other):
+        return self._complexity() == other._complexity()
 
-    def __contains__(self,x):
+    def __lt__(self, other):
+        return self._complexity() < other._complexity()
+    
+    def __contains__(self, x):
         """
         True if the argument is contained in either the domain or range.
         """
@@ -192,7 +195,7 @@ class Pairing:
         True if the Pairing is  restriction of the identity map.
         """
         return (self.is_preserving and self.isometry.shift == 0 or
-	       self.domain.width == 1 and self.domain == self.range)
+                self.domain.width == 1 and self.domain == self.range)
     
     def contract(self,I):
         """
@@ -200,7 +203,7 @@ class Pairing:
         """
         I = ToInterval(I)
         if I ^ self.domain or I ^ self.range:
-            raise Illegal, "Contraction interval is not static."
+            raise Illegal('Contraction interval is not static.')
         shift = Isometry( -I.width )
         if I.end < self.domain.start:
             return Pairing(shift(self.domain), shift * self.isometry * ~shift)
@@ -219,7 +222,7 @@ class Pairing:
         else:
             intersection = self.domain ^ self.range
             if intersection:
-                middle = (self.domain.start + self.range.end - 1)/2
+                middle = (self.domain.start + self.range.end - 1) // 2
                 domain = Interval(self.domain.start, middle)
                 return Pairing(domain, self.isometry)
             else:
@@ -241,7 +244,7 @@ class Pairing:
             else:
                 return None
         else:
-            raise Illegal, "Pairing cannot be merged."
+            raise Illegal('Pairing cannot be merged.')
 
     def transmit(self, other):
         """
@@ -258,10 +261,10 @@ class Pairing:
                 domain = trim.isometry(domain)
         else:
             shift = trim.isometry.shift
-            post = -(1 + (other.range.start - trim.range.start)/shift)
+            post = -(1 + (other.range.start - trim.range.start) // shift)
             isometry = (trim.isometry**post) * other.isometry
             if domain in trim.range:
-                pre = 1 + (other.domain.start - trim.range.start)/shift
+                pre = 1 + (other.domain.start - trim.range.start) // shift
                 isometry = isometry * (trim.isometry**pre)
                 domain = (trim.isometry**(-pre))(domain)
         range = isometry(domain)
@@ -280,7 +283,7 @@ def Shift(domain, range):
     if range.__class__ != Interval:
         range = Interval(range[0], range[1])
     if domain.width != range.width:
-        raise Illegal, "The domain and range must have the same width."
+        raise Illegal('The domain and range must have the same width.')
     if range.start < domain.start:
         domain, range = range, domain
     isometry = Isometry(range.start - domain.start)
@@ -296,7 +299,7 @@ def Flip(domain, range):
     if range.__class__ != Interval:
         range = Interval(range[0], range[1])
     if domain.width != range.width:
-        raise Illegal, "The domain and range must have the same width."
+        raise Illegal('The domain and range must have the same width.')
     if range.start < domain.start:
         domain, range = range, domain
     isometry = Isometry(range.end + domain.start, 1)
@@ -311,21 +314,21 @@ class Pseudogroup:
         self.pairings = pairings
         start = min([p.domain.start for p in self.pairings])
         end = max([p.range.end for p in self.pairings])
-	if universe: 
+        if universe: 
             universe = ToInterval(universe)
-	    if start < universe.start or end > universe.end:
-                raise ValueError, 'Universe must contain all domains and ranges.'
+            if start < universe.start or end > universe.end:
+                raise ValueError('Universe must contain all domains and ranges.')
             self.universe = universe
-	else:
+        else:
             self.universe = Interval(start, end)
         
     def __repr__(self):
         result = 'Pseudogroup on %s:\n'%str(self.universe)
-	if self.pairings:
+        if self.pairings:
             self.pairings.sort()
             for pairing in self.pairings:
                 result += str(pairing) + '\n'
-	return result 
+        return result 
 
     def clean(self):
         """
@@ -348,7 +351,7 @@ class Pseudogroup:
         intervals = [p.domain for p in self.pairings]
         intervals += [p.range for p in self.pairings]
         intervals.sort()
-	I = intervals.pop(0)
+        I = intervals.pop(0)
         start, end = I.start, I.end
         if start > 1:
             return Interval(1, start - 1)
@@ -389,7 +392,7 @@ class Pseudogroup:
                     g = None 
                     try:
                         g = p.merge(q)
-	            except: pass
+                    except: pass
                     if g:
                         self.pairings.remove(p) 
                         self.pairings.remove(q)
@@ -434,18 +437,18 @@ class Pseudogroup:
         if len(self.pairings) == 0:
             self.pairings = None
             return self.universe.width
-#        print "cleaned\n", self
+        #print("cleaned\n", self)
         count = self.contract()
-#        print "contracted\n", self
+        #print("contracted\n", self)
         self.trim()
-#        print "trimmed\n", self
+        #print("trimmed\n", self)
         self.merge()
-#        print "merged\n", self
+        #print("merged\n", self)
         self.transmit()
-#        print "transmitted\n", self
+        #print("transmitted\n", self)
         self.truncate()
-#        print "truncated\n", self
-#	print 'count = ', count
+        #print("truncated\n", self)
+        #print('count = ', count)
         return count
 
     def reduce(self):
