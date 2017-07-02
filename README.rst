@@ -1,5 +1,9 @@
+.. |copy| unicode:: 0xA9 .. copyright sign
+
 Orbits
-======
+========
+
+Copyright |copy| 2017, Marc Culler
 |
 
 Description
