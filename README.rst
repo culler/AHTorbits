@@ -10,7 +10,7 @@ Copyright |copy| 2017, Marc Culler
 Description
 -----------
 
-In remarkable `paper
+In a remarkable `paper
 <http://www.ams.org/journals/tran/2006-358-09/S0002-9947-05-03919-X/S0002-9947-05-03919-X.pdf>`_
 by Ian Agol, Joel Hass and Bill Thurston it was shown that the problem of
 deciding whether a knot has a genus g spanning surface is NP complete.  Along
